@@ -1,2 +1,2 @@
-# SEQ-algo-for-paging-algo
+# SEQ-algo-for-paging
 Simulate SEQ algo for paging
