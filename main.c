@@ -1,127 +1,172 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "helper.h"
+#include "lru.h"
+
+//define L, N, M for seq algorithm here
+//L, N, M should sastify 0 <= M < N <= L (L >= 2)
+#define L 2
+#define N 2
+#define M 1      
+
+int dbg = 0;
+
+typedef struct seq {
+    int low;
+    int high;
+    int dir;
+
+    //we only need N elements to keep track of Nth most page fault
+    //pf_time should be saved as queue
+    int pf_time[N];
+}seq;
 
 //for simulating stack
 int pop(int*, int*, int);
 void push(int*, int*, int);
 
-void print_table(int ar[16][16], int n, int m) {
-    for (int i = 0; i < n; ++i) {
-        for (int j = 0; j < m; ++j) {
-            printf("%2d ", ar[i][j]);
-        }
-        puts(""); 
-    }
-}
+//for seq algorithm
+struct seq seperate(struct seq*, int);
+void assign(struct seq*, int, int, int);
+int length(struct seq);
+int find_seq_idx(struct seq*, int);
+int find_pf(struct seq);
+void removeByIdx(struct seq* cnt, int*, int);
+short can_overlap(struct seq, int);
+short can_extend(struct seq, int);
+void extend(struct seq*, int, int);
+void print_seq(struct seq, int);
 
-void lru(int frame_size, int* ar, int n) {
-    int arr[16][16];
+void run_seq(int frame_size, int* ar, int n) {
+    //sequences
+    struct seq seqs[16];
+    int seq_cnt = 0;
 
-    int stack[16], stack_sz = 0;
-    int faults[16], cnt[16];
-    fillzeros(stack, 16); //assign 0 to all elements in stack
+    //lru
+    int lru[16];
+    fillzeros(lru, 16);
+
+    //frame content
+    int frame[16];
+    fillzeros(frame, 16);
+
+    //faults
+    int faults[16];
     fillzeros(faults, 16);
-    fillzeros(cnt, 16);
 
-    for (int i = 0; i < n; ++i) {
-        int v = ar[i];
+    //table
+    int table[16][16];
 
-        if (stack_sz == 0)
-            push(stack, &stack_sz, v);
-        else {
-            int ind = test_avail(stack, stack_sz, v);
-            if (ind < 0) {
-                if (stack_sz < frame_size)
-                    push(stack, &stack_sz, v);
-                else {
-                    int m_i = 0, m = cnt[m_i];
-                    for (int j = 1; j < frame_size; ++j)
-                        if (cnt[j] > m && cnt[j] > 0) {
-                            m_i = j;
-                            m = cnt[m_i];
-                        } 
-                    stack[m_i] = v;               
-                    cnt[m_i] = 0;
-                    faults[i] = 1;
-                }
-            } else {
-                cnt[ind] = 0;
-            }
-        }       
-        inc_all(cnt, stack, 16);
+    //init first values
+    assign(&seqs[0], 0, 0, 1);
+    seqs[0].pf_time[0] = 0;
+    lru[0] = seq_cnt = 1;
+    frame[0] = ar[0];
+    for (int k = 0; k < frame_size; ++k) 
+            table[k][0] = frame[k];
+    
+    //fill until frame is full
+    int i = 1, c = 1;
+    while (c < frame_size && i < n) {
+        int idx = test_avail(frame, c, ar[i]);
+        if (idx < 0) {
+            frame[c] = ar[i];
+            extend(&seqs[0], c, i);
+            ++c; 
+        } else {
+            lru[idx] = 0;
+        }
+
+        inc_all(lru, frame, frame_size);
         for (int k = 0; k < frame_size; ++k) {
-            arr[k][i] = stack[k];
+            table[k][i] = frame[k];
         }
+        ++i;
     }
-    for (int i = 0; i < n; ++i)
-        printf("%2d ", ar[i]);
-    printf("\n");
-    print_table(arr, frame_size, n);
-    for (int i = 0; i < n; ++i)
-        if (faults[i]) 
-            printf(" F ");
-        else
-            printf("   ");
-}
 
-void seq(int frame_size, int* ar, int n) {
-    int arr[16][16], stack[16];
-
-    int seqs[100][5], c = 0, stack_sz = 0;
-    int cnt[16], faults[16];
-
-    fillzeros(cnt, 16);
-    fillzeros(faults, 16);
-    for (int i = 0; i < n; ++i) {
-        int v = ar[i];
-
-        if (stack_sz == 0) {
-            push(stack, &stack_sz, v); 
-            c += 1;
-            seqs[0][0] = seqs[0][1] = v;
-            seqs[0][2] = seqs[0][3] = seqs[0][4] = 0;
-        }
-        else {
-            int ind = test_avail(stack, stack_sz, v);
-            if (ind < 0) {
-                if (stack_sz < frame_size) {
-                    push(stack, &stack_sz, v); 
-                    for (int u = 0; u < c; ++u) {
-                        if (seqs[u][4] == 0) 
-                    }
-                }
-                else {
-                    int m_i = 0, m = cnt[m_i];
-                    for (int j = 1; j < frame_size; ++j)
-                        if (cnt[j] > m && cnt[j] > 0) {
-                            m_i = j;
-                            m = cnt[m_i];
-                        } 
-                    stack[m_i] = v;               
-                    cnt[m_i] = 0;
-                    faults[i] = 1;
-                }
-            } else {
-                cnt[ind] = 0;
+    while (i < n) {
+        //printf("%d\n", ++dbg);
+        /*
+        for (int o = 0; o < seq_cnt; ++o)
+            print_seq(seqs[o], o);
+        */
+        int u;
+        if ((u=test_avail(frame, frame_size, ar[i])) >= 0) {
+            lru[u] = 0;
+            
+            inc_all(lru, frame, frame_size);
+            for (int k = 0; k < frame_size; ++k) {
+                table[k][i] = frame[k];
             }
+            ++i;
+            continue;
         }
+        faults[i] = 1;
+        int idx = find_seq_idx(seqs, seq_cnt), pf;
+        if (idx >= 0) 
+            pf = find_pf(seqs[idx]);
+        else {
+            //perform lru
+            pf = 0;
+            int m = lru[pf];
+            for (int j = 1; j < frame_size; ++j)
+                if (lru[j] > m && lru[j] > 0) {
+                    pf = j;
+                    m = lru[pf];
+                } 
+        }
+
+        int idxs[2] = {-1, -1};
+        //check extend
+        for (int j = 0; j < seq_cnt; ++j)
+            if (can_extend(seqs[j], pf)) {
+                if (idxs[0] < 0)
+                    idxs[0] = j;
+                else
+                    idxs[1] = j;
+            }
         
-        inc_all(cnt, stack, 16);
-        for (int k = 0; k < frame_size; ++k) {
-            arr[k][i] = stack[k];
+        //if there is a sequence can be extended
+        if (idxs[0] >= 0) {
+            int idx_to_extend;
+            if (idxs[1] >= 0) {
+                if (seqs[idxs[0]].pf_time[0] > seqs[idxs[1]].pf_time[0]) 
+                    idx_to_extend = idxs[0];
+                else 
+                    idx_to_extend = idxs[1];                  
+            } else 
+                idx_to_extend = idxs[0];
+            
+            //check if extending sequence can lead to overlap with another sequence
+            for (int j = 0; j < seq_cnt;) 
+                if (can_overlap(seqs[j], pf)) {
+                    removeByIdx(seqs, &seq_cnt, j);
+                } else ++j;
+            extend(&seqs[idx_to_extend], pf, i);
+        } else {
+            //if no sequence can be extended, proceed to replace in middle of a sequence 
+            seqs[seq_cnt++] = seperate(&seqs[idx], pf);
+            seqs[seq_cnt - 1].pf_time[0] = i;
         }
+        /*
+        for (int o = 0; o < frame_size; ++o)
+            printf("%d ", frame[o]);
+        puts("");
+        */
+        
+
+        frame[pf] = ar[i];
+
+        //keep a record of lru for fall handling
+        lru[pf] = 0;
+        inc_all(lru, frame, frame_size);
+        for (int k = 0; k < frame_size; ++k) {
+            table[k][i] = frame[k];
+        }
+        ++i;
     }
 
-    for (int i = 0; i < n; ++i)
-        printf("%2d ", ar[i]);
-    printf("\n");
-    print_table(arr, frame_size, n);
-    for (int i = 0; i < n; ++i)
-        if (faults[i]) 
-            printf(" F ");
-        else
-            printf("   ");
+    print_table(table, ar, faults, frame_size, n);
 }
 
 int main() {
@@ -151,7 +196,7 @@ int main() {
             seqlen = -1;
         }
     }
-    printf("Enter the sequence of numbers (all numbers must be positive): ");
+    printf("Enter the sequence of numbers: ");
     for (int i = 0; i < seqlen; ++i)
         scanf("%d", &ar[i]);
 
@@ -160,8 +205,8 @@ int main() {
     printf("\nLRU Table: \n");
     lru(frame_size, ar, seqlen);
 
-    printf("\nSEQ Table: \n");
-    seq(frame_size, ar, seqlen);
+    printf("\nSEQ Table (L = %d,N = %d,M = %d): \n", L, N, M);
+    run_seq(frame_size, ar, seqlen);
     return 0;
 }
 
@@ -179,3 +224,92 @@ void push(int* stack, int* n, int v) {
     *n += 1;
 }
 //end simulating stack
+
+//seq algo helpers
+struct seq seperate(struct seq* a, int j) {
+    if (a->dir == -1)
+        a->low=j+1;
+    else if (a->dir == 1)
+        a->high=j-1;
+
+    struct seq u;
+    u.low=u.high=j;
+    u.dir=0;
+    return u;
+}
+
+void assign(struct seq* s, int l, int h, int d) {
+    s->low = l;
+    s->high = h;
+    s->dir = d;
+}
+
+int find_pf(struct seq a) {
+    if (a.dir == 1)
+        return a.high-M;
+    return a.low+M;
+}
+
+int length(struct seq a) {
+    return a.high - a.low + 1;
+}
+
+//pf: page fault, pf_t: time of this page fault
+void extend(struct seq* a, int pf, int pf_t) {
+    if (a->dir > 0 && a->high == pf - 1)
+        a->high = pf; 
+    else if (a->dir < 0 && a->low == pf + 1)
+        a->low = pf; 
+    else {
+        if (a->high == pf-1) {
+            a->high = pf;
+            a->dir = 1;
+        } else {
+            a->low = pf;
+            a->dir = -1;
+        }
+    }
+
+    a->pf_time[1] = a->pf_time[0];
+    a->pf_time[0] = pf_t;
+}
+
+short can_extend(struct seq a, int v) {
+    return (a.dir >= 0 && a.high == v - 1) || (a.dir <= 0 && a.low == v + 1);
+}
+
+short can_overlap(struct seq a, int v) {
+    return (a.low <= v && v <= a.high); 
+}
+
+int find_seq_idx(struct seq* a, int cnt) {
+    int m = -1, idx = -1;
+    for (int i = 0; i < cnt; ++i)
+        if (length(a[i]) >= L && a[i].pf_time[1] > m) {
+            m = a[i].pf_time[1];
+            idx = i;
+        } 
+    return idx;
+}
+
+void removeByIdx(struct seq* a, int* seq_cnt, int idx) {
+    for (int i = idx; i < *seq_cnt - 1; ++i)
+        a[i] = a[i+1];
+    *seq_cnt -= 1;
+}
+
+void update_time(struct seq* a, int cnt, int pf, int pf_t) {
+    for (int i = 0; i < cnt; ++i)
+        if (can_overlap(a[i], pf)) {
+            a[i].pf_time[1] = a[i].pf_time[0];
+            a[i].pf_time[0] = pf_t;
+            break;
+        }
+}
+
+void print_seq(struct seq a, int i) {
+    if (i >= 0)
+        printf("i-%d ", i);
+    printf("seq dbg: %d %d %d\n", a.low, a.high, a.dir);
+}
+//end seq algo helpers

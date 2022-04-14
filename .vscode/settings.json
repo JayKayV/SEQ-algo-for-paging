@@ -1,0 +1,6 @@
+{
+    "files.associations": {
+        "lru.h": "c",
+        "stdlib.h": "c"
+    }
+}
