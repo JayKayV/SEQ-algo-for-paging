@@ -23,7 +23,7 @@ void inc_all(int* ar, int* ar2, int n) {
 }
 
 //start table output
-void print_framecontent(int ar[16][16], int n, int m) {
+void print_framecontent(int ar[16][30], int n, int m) {
     for (int i = 0; i < n; ++i) {
         for (int j = 0; j < m; ++j) {
             printf("%2d ", ar[i][j]);
@@ -32,7 +32,7 @@ void print_framecontent(int ar[16][16], int n, int m) {
     }
 }
 
-void print_table(int arr[16][16], int* ar, int* faults, int frame_size, int n) {
+void print_table(int arr[16][30], int* ar, int* faults, int frame_size, int n) {
     for (int i = 0; i < n; ++i)
         printf("%2d ", ar[i]);
     printf("\n");

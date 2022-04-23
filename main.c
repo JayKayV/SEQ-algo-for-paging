@@ -17,8 +17,8 @@ typedef struct seq {
     int dir;
 
     //we only need N elements to keep track of Nth most page fault
-    //pf_time should be saved as queue
-    int pf_time[N];
+    //pf_time should be saved as queue to optimize space
+    int pf_time[50];
 }seq;
 
 //for simulating stack
@@ -27,6 +27,7 @@ void push(int*, int*, int);
 
 //for seq algorithm
 struct seq seperate(struct seq*, int);
+void removeSeq(struct seq* , int*);
 void assign(struct seq*, int, int, int);
 int length(struct seq);
 int find_seq_idx(struct seq*, int);
@@ -48,14 +49,14 @@ void run_seq(int frame_size, int* ar, int n) {
 
     //frame content
     int frame[16];
-    fillzeros(frame, 16);
+    fillzeros(frame, frame_size);
 
     //faults
-    int faults[16];
-    fillzeros(faults, 16);
+    int faults[30];
+    fillzeros(faults, n);
 
     //table
-    int table[16][16];
+    int table[16][30];
 
     //init first values
     assign(&seqs[0], 0, 0, 1);
@@ -116,6 +117,7 @@ void run_seq(int frame_size, int* ar, int n) {
                 } 
         }
 
+        //update seqs and lru accordingly
         int idxs[2] = {-1, -1};
         //check extend
         for (int j = 0; j < seq_cnt; ++j)
@@ -146,6 +148,7 @@ void run_seq(int frame_size, int* ar, int n) {
         } else {
             //if no sequence can be extended, proceed to replace in middle of a sequence 
             seqs[seq_cnt++] = seperate(&seqs[idx], pf);
+            removeSeq(seqs, &seq_cnt);
             seqs[seq_cnt - 1].pf_time[0] = i;
         }
         /*
@@ -160,6 +163,8 @@ void run_seq(int frame_size, int* ar, int n) {
         //keep a record of lru for fall handling
         lru[pf] = 0;
         inc_all(lru, frame, frame_size);
+
+        //save record
         for (int k = 0; k < frame_size; ++k) {
             table[k][i] = frame[k];
         }
@@ -171,7 +176,7 @@ void run_seq(int frame_size, int* ar, int n) {
 
 int main() {
     int seqlen = -1, frame_size = -1; //sequence length, frame size
-    int ar[16];
+    int ar[30];
 
     while (frame_size < 0) {
         printf("Enter the size of the frame (max: 16): ");
@@ -186,13 +191,13 @@ int main() {
     }
 
     while (seqlen < 0) {
-        printf("Enter the number of elements need to be simulated (max: 16): ");
+        printf("Enter the number of elements need to be simulated (max: 30): ");
         scanf("%d", &seqlen); 
 
-        if (test_value(seqlen, 1, 16) == 0)
+        if (test_value(seqlen, 1, 30) == 0)
             break;
         else {
-            printf("Sequence length must be between 0 and 16\n"); 
+            printf("Sequence length must be between 0 and 30\n"); 
             seqlen = -1;
         }
     }
@@ -200,7 +205,7 @@ int main() {
     for (int i = 0; i < seqlen; ++i)
         scanf("%d", &ar[i]);
 
-    printf("Input received: seqlen-%d fr-sz-%d\n", frame_size, seqlen);
+    printf("Input received: seqlen-%d fr-sz-%d\n", seqlen, frame_size);
 
     printf("\nLRU Table: \n");
     lru(frame_size, ar, seqlen);
@@ -311,5 +316,18 @@ void print_seq(struct seq a, int i) {
     if (i >= 0)
         printf("i-%d ", i);
     printf("seq dbg: %d %d %d\n", a.low, a.high, a.dir);
+}
+
+void removeSeq(struct seq* seqs, int* cnt) {
+    for (int i = 0; i < *cnt;) {
+        if (seqs[i].low > seqs[i].high) {
+            for (int j = i; j < *cnt - 1; ++j) {
+                seqs[j] = seqs[j+1];
+            }
+            *cnt -= 1;
+            break;
+        } 
+        ++i;
+    }
 }
 //end seq algo helpers

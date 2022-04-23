@@ -1,11 +1,11 @@
 void lru(int frame_size, int* ar, int n) {
-    int arr[16][16];
+    int arr[16][30];
 
     int stack[16], stack_sz = 0;
-    int faults[16], cnt[16];
-    fillzeros(stack, 16); //assign 0 to all elements in stack
-    fillzeros(faults, 16);
-    fillzeros(cnt, 16);
+    int faults[30], cnt[16];
+    fillzeros(stack, frame_size); //assign 0 to all elements in stack
+    fillzeros(faults, 30);
+    fillzeros(cnt, frame_size);
 
     for (int i = 0; i < n; ++i) {
         int v = ar[i];
