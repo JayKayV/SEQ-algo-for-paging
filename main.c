@@ -11,13 +11,15 @@
 
 int dbg = 0;
 
-typedef struct seq {
+struct seq {
     int low;
     int high;
     int dir;
 
     //we only need N elements to keep track of Nth most page fault
-    //pf_time should be saved as queue to optimize space
+    //so pf_time should be saved as queue to optimize space
+    //however to simplify the sim...
+    int upd_cnt;
     int pf_time[50];
 }seq;
 
@@ -26,7 +28,7 @@ int pop(int*, int*, int);
 void push(int*, int*, int);
 
 //for seq algorithm
-struct seq seperate(struct seq*, int);
+struct seq seperate(struct seq*, int, int);
 void removeSeq(struct seq* , int*);
 void assign(struct seq*, int, int, int);
 int length(struct seq);
@@ -60,6 +62,7 @@ void run_seq(int frame_size, int* ar, int n) {
 
     //init first values
     assign(&seqs[0], 0, 0, 1);
+    seqs[0].upd_cnt = 1;
     seqs[0].pf_time[0] = 0;
     lru[0] = seq_cnt = 1;
     frame[0] = ar[0];
@@ -147,7 +150,7 @@ void run_seq(int frame_size, int* ar, int n) {
             extend(&seqs[idx_to_extend], pf, i);
         } else {
             //if no sequence can be extended, proceed to replace in middle of a sequence 
-            seqs[seq_cnt++] = seperate(&seqs[idx], pf);
+            seqs[seq_cnt++] = seperate(&seqs[idx], pf, i);
             removeSeq(seqs, &seq_cnt);
             seqs[seq_cnt - 1].pf_time[0] = i;
         }
@@ -231,7 +234,7 @@ void push(int* stack, int* n, int v) {
 //end simulating stack
 
 //seq algo helpers
-struct seq seperate(struct seq* a, int j) {
+struct seq seperate(struct seq* a, int j, int t) {
     if (a->dir == -1)
         a->low=j+1;
     else if (a->dir == 1)
@@ -239,7 +242,8 @@ struct seq seperate(struct seq* a, int j) {
 
     struct seq u;
     u.low=u.high=j;
-    u.dir=0;
+    u.dir=u.upd_cnt=0;
+    u.pf_time[u.upd_cnt++] = t;
     return u;
 }
 
@@ -275,8 +279,7 @@ void extend(struct seq* a, int pf, int pf_t) {
         }
     }
 
-    a->pf_time[1] = a->pf_time[0];
-    a->pf_time[0] = pf_t;
+    push(a->pf_time, &a->upd_cnt, pf_t); 
 }
 
 short can_extend(struct seq a, int v) {
@@ -290,8 +293,8 @@ short can_overlap(struct seq a, int v) {
 int find_seq_idx(struct seq* a, int cnt) {
     int m = -1, idx = -1;
     for (int i = 0; i < cnt; ++i)
-        if (length(a[i]) >= L && a[i].pf_time[1] > m) {
-            m = a[i].pf_time[1];
+        if (length(a[i]) >= L && a[i].pf_time[a[i].upd_cnt-N] > m) {
+            m = a[i].pf_time[a[i].upd_cnt-N];
             idx = i;
         } 
     return idx;
@@ -306,8 +309,7 @@ void removeByIdx(struct seq* a, int* seq_cnt, int idx) {
 void update_time(struct seq* a, int cnt, int pf, int pf_t) {
     for (int i = 0; i < cnt; ++i)
         if (can_overlap(a[i], pf)) {
-            a[i].pf_time[1] = a[i].pf_time[0];
-            a[i].pf_time[0] = pf_t;
+            a[i].pf_time[a[i].upd_cnt++] = pf_t;
             break;
         }
 }
